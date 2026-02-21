@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧠 Subconscious — AI Bilinçaltı Dashboard</title>
+    <meta name="description"
+        content="AI Bilinçaltı Framework Dashboard - Kavram ağı, duygusal analiz ve rüya görselleştirme">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #1e1e35;
+            --border: #2a2a3e;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888aa;
+            --text-dim: #555577;
+            --accent-purple: #7c3aed;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-pink: #ec4899;
+            --accent-orange: #f97316;
+            --glow-purple: rgba(124, 58, 237, 0.3);
+            --glow-blue: rgba(59, 130, 246, 0.2);
+            --radius: 12px;
+            --radius-lg: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* ─── Animated Background ──────────────────────────────── */
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 20% 30%, var(--glow-purple) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, var(--glow-blue) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+            animation: bgPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+
+            0%,
+            100% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* ─── Layout ───────────────────────────────────────────── */
+        .app {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 380px 1fr 320px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 1px;
+        }
+
+        /* ─── Header ───────────────────────────────────────────── */
+        header {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 0 20px var(--glow-purple);
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .header-stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header-stat .value {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+
+        /* ─── Chat Panel ───────────────────────────────────────── */
+        .chat-panel {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-title {
+            padding: 16px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .msg {
+            max-width: 95%;
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            line-height: 1.6;
+            animation: msgIn 0.3s ease;
+        }
+
+        @keyframes msgIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg.assistant {
+            align-self: flex-start;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+        }
+
+        .msg.system {
+            align-self: center;
+            background: transparent;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .chat-input-wrap {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+        }
+
+        #chatInput {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #chatInput:focus {
+            border-color: var(--accent-purple);
+        }
+
+        #chatInput::placeholder {
+            color: var(--text-dim);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            border: none;
+            border-radius: var(--radius);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 12px 20px;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--glow-purple);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-purple);
+            box-shadow: none;
+        }
+
+        .btn-sm {
+            padding: 8px 14px;
+            font-size: 12px;
+        }
+
+        .btn-dream {
+            background: linear-gradient(135deg, #1e1b4b, #312e81);
+            border: 1px solid #4338ca;
+        }
+
+        .btn-dream:hover {
+            box-shadow: 0 4px 20px rgba(67, 56, 202, 0.4);
+        }
+
+        /* ─── Graph Panel ──────────────────────────────────────── */
+        .graph-panel {
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #graphCanvas {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        #graphCanvas:active {
+            cursor: grabbing;
+        }
+
+        .graph-overlay {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 2;
+        }
+
+        .graph-info {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            z-index: 2;
+        }
+
+        /* ─── Side Panel ───────────────────────────────────────── */
+        .side-panel {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .side-section {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .side-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Emotion Display */
+        .emotion-display {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+        }
+
+        .emotion-icon {
+            font-size: 28px;
+        }
+
+        .emotion-info {
+            flex: 1;
+        }
+
+        .emotion-name {
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: capitalize;
+        }
+
+        .emotion-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+
+        .emotion-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .trend-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .trend-improving {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+        }
+
+        .trend-declining {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .trend-stable {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-yellow);
+        }
+
+        /* Stat cards */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 12px;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border);
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Dream section */
+        .dream-thought {
+            padding: 10px 14px;
+            background: linear-gradient(135deg, rgba(30, 27, 75, 0.5), rgba(49, 46, 129, 0.3));
+            border: 1px solid rgba(67, 56, 202, 0.3);
+            border-radius: var(--radius);
+            font-size: 13px;
+            font-style: italic;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            animation: dreamFade 2s ease;
+        }
+
+        @keyframes dreamFade {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Subconscious overlay in chat */
+        .sub-overlay {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(59, 130, 246, 0.05));
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .sub-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin: 2px;
+            background: rgba(124, 58, 237, 0.15);
+            color: var(--accent-purple);
+        }
+
+        .sub-intuition {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(124, 58, 237, 0.15);
+            color: var(--accent-pink);
+            font-style: italic;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        .loading-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            animation: dotBounce 1.4s infinite;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loading-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes dotBounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0.6);
+                opacity: 0.4;
+            }
+
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-dim);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .app {
+                grid-template-columns: 320px 1fr;
+            }
+
+            .side-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-grid"></div>
+
+    <div class="app">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🧠</div>
+                <span>Subconscious</span>
+                <span style="font-size:11px;color:var(--text-dim);font-weight:400">v0.3.0</span>
+            </div>
+            <div class="header-stats" id="headerStats">
+                <div class="header-stat">
+                    <div class="pulse-dot" style="background:var(--accent-green)"></div>
+                    <span>STM</span>
+                    <span class="value" id="hdrStm">0</span>
+                </div>
+                <div class="header-stat">
+                    <span>🔗</span>
+                    <span class="value" id="hdrAssoc">0</span>
+                    <span>bağlantı</span>
+                </div>
+                <div class="header-stat">
+                    <span>🧩</span>
+                    <span class="value" id="hdrConcepts">0</span>
+                    <span>kavram</span>
+                </div>
+                <div class="header-stat">
+                    <span>🌙</span>
+                    <span class="value" id="hdrDreams">0</span>
+                    <span>rüya</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="panel-title">💬 Sohbet</div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="msg system">Bilinçaltı aktif. Bir şey yaz ve AI'ın arka plan düşünce süreçlerini gözlemle.
+                </div>
+            </div>
+            <div class="chat-input-wrap">
+                <input type="text" id="chatInput" placeholder="Mesajını yaz..." autocomplete="off">
+                <button class="btn" id="sendBtn" onclick="sendMessage()">Gönder</button>
+            </div>
+            <div style="padding:8px 16px;display:flex;gap:6px">
+                <button class="btn btn-sm btn-dream" onclick="triggerDream()">🌙 Rüya</button>
+                <button class="btn btn-sm btn-secondary" onclick="refreshStats()">📊 Yenile</button>
+            </div>
+        </div>
+
+        <!-- Graph Panel -->
+        <div class="graph-panel">
+            <div class="graph-overlay">
+                <div class="panel-title"
+                    style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px">
+                    🕸 Çağrışım Ağı</div>
+            </div>
+            <canvas id="graphCanvas"></canvas>
+            <div class="graph-info" id="graphInfo">Kavram yok — Konuşmaya başla</div>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="side-panel">
+            <!-- Emotion -->
+            <div class="side-section">
+                <h3>🎭 Duygusal Durum</h3>
+                <div id="emotionDisplay">
+                    <div class="emotion-display">
+                        <div class="emotion-icon">😐</div>
+                        <div class="emotion-info">
+                            <div class="emotion-name">Nötr</div>
+                            <div class="emotion-bar">
+                                <div class="emotion-bar-fill" style="width:30%;background:var(--accent-yellow)"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trend-badge trend-stable">➡️ Stabil</div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="side-section">
+                <h3>📊 Bellek</h3>
+                <div class="stat-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--accent-cyan)" id="statStm">0</div>
+                        <div class="stat-label">STM</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--accent-blue)" id="statLtm">0</div>
+                        <div class="stat-label">LTM</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--accent-purple)" id="statConcepts">0</div>
+                        <div class="stat-label">Kavram</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--accent-green)" id="statEdges">0</div>
+                        <div class="stat-label">Bağlantı</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dream -->
+            <div class="side-section">
+                <h3>🌙 Rüya Düşünceleri</h3>
+                <div id="dreamThoughts">
+                    <div class="dream-thought">Henüz rüya görülmedi...</div>
+                </div>
+            </div>
+
+            <!-- Subconscious -->
+            <div class="side-section">
+                <h3>💡 Son Sezgi</h3>
+                <div id="lastIntuition" style="font-size:13px;color:var(--text-secondary);font-style:italic">
+                    Henüz sezgi yok...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── State ───────────────────────────────────────────────────────────
+        let ws = null;
+        let graphNodes = [];
+        let graphEdges = [];
+        let canvas, ctx;
+        let animFrame;
+        let dragNode = null;
+        let mouseX = 0, mouseY = 0;
+        let offsetX = 0, offsetY = 0;
+
+        const EMOTION_ICONS = {
+            'sevinç': '😊', 'güven': '🤝', 'korku': '😨', 'şaşkınlık': '😲',
+            'üzüntü': '😢', 'tiksinme': '🤢', 'öfke': '😡', 'beklenti': '🔮',
+            'merak': '🤔', 'heyecan': '🤩', 'kaygı': '😰', 'sakinlik': '😌', 'nötr': '😐'
+        };
+        const EMOTION_COLORS = {
+            'sevinç': '#10b981', 'güven': '#3b82f6', 'korku': '#ef4444', 'şaşkınlık': '#f59e0b',
+            'üzüntü': '#6366f1', 'tiksinme': '#84cc16', 'öfke': '#ef4444', 'beklenti': '#8b5cf6',
+            'merak': '#06b6d4', 'heyecan': '#ec4899', 'kaygı': '#f97316', 'sakinlik': '#14b8a6', 'nötr': '#6b7280'
+        };
+
+        // ─── Init ────────────────────────────────────────────────────────────
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas = document.getElementById('graphCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+
+            document.getElementById('chatInput').addEventListener('keydown', e => {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            connectWebSocket();
+            refreshStats();
+            renderGraph();
+        });
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+
+        // ─── WebSocket ───────────────────────────────────────────────────────
+        function connectWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+            ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'chat_response') handleChatResponse(msg.data);
+                else if (msg.type === 'graph_update') updateGraph(msg.data);
+                else if (msg.type === 'stats_update') updateStats(msg.data);
+                else if (msg.type === 'dream_report') handleDreamReport(msg.data);
+            };
+            ws.onclose = () => { ws = null; setTimeout(connectWebSocket, 3000); };
+            ws.onerror = () => { ws = null; };
+        }
+
+        // ─── Chat ────────────────────────────────────────────────────────────
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            addLoading();
+            input.value = '';
+            document.getElementById('sendBtn').disabled = true;
+
+            try {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // WebSocket yolu
+                    ws.send(JSON.stringify({ type: 'chat', message: text }));
+                } else {
+                    // REST fallback
+                    const res = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text, show_subconscious: true }),
+                    });
+                    const data = await res.json();
+                    handleChatResponse(data);
+                    refreshStats();
+                }
+            } catch (e) {
+                removeLoading();
+                addMessage('⚠ Bağlantı hatası — sunucu çalışıyor mu?', 'system');
+            } finally {
+                document.getElementById('sendBtn').disabled = false;
+            }
+        }
+
+        function handleChatResponse(data) {
+            removeLoading();
+            addMessage(data.response, 'assistant');
+
+            if (data.subconscious) {
+                const sub = data.subconscious;
+                // Subconscious overlay
+                const overlay = buildSubOverlay(sub);
+                if (overlay) addRaw(overlay);
+                // Update emotion
+                if (sub.emotional_tag) updateEmotion(sub.emotional_tag, sub.emotional_trend);
+                // Update intuition
+                if (sub.intuition) {
+                    document.getElementById('lastIntuition').textContent = sub.intuition;
+                }
+            }
+        }
+
+        function addMessage(text, role) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `msg ${role}`;
+            div.textContent = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addRaw(html) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            div.style.animation = 'msgIn 0.3s ease';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addLoading() {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.id = 'loadingMsg';
+            div.className = 'loading';
+            div.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div> Bilinçaltı işliyor...';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        function removeLoading() {
+            const el = document.getElementById('loadingMsg');
+            if (el) el.remove();
+        }
+
+        function buildSubOverlay(sub) {
+            const parts = [];
+            const assocs = sub.associations || [];
+            if (assocs.length > 0) {
+                const tags = assocs.flatMap(a => a.tags || []).filter(Boolean);
+                if (tags.length) parts.push(tags.map(t => `<span class="sub-tag">${t}</span>`).join(''));
+            }
+            if (sub.intuition) {
+                parts.push(`<div class="sub-intuition">💡 ${sub.intuition}</div>`);
+            }
+            if (sub.emotional_tone) {
+                parts.push(`<div style="margin-top:4px;font-size:11px;color:var(--text-dim)">🎭 ${sub.emotional_tone}</div>`);
+            }
+            if (!parts.length) return null;
+            return `<div class="sub-overlay">${parts.join('')}</div>`;
+        }
+
+        // ─── Dream ───────────────────────────────────────────────────────────
+        async function triggerDream() {
+            addMessage('🌙 Rüya başlıyor...', 'system');
+            try {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'dream' }));
+                } else {
+                    const res = await fetch('/api/dream', { method: 'POST' });
+                    const data = await res.json();
+                    handleDreamReport(data);
+                }
+            } catch (e) {
+                addMessage('⚠ Rüya hatası', 'system');
+            }
+        }
+
+        function handleDreamReport(data) {
+            const container = document.getElementById('dreamThoughts');
+            container.innerHTML = '';
+
+            if (data.dream_thoughts && data.dream_thoughts.length > 0) {
+                data.dream_thoughts.forEach(t => {
+                    const div = document.createElement('div');
+                    div.className = 'dream-thought';
+                    div.textContent = `💭 ${t}`;
+                    container.appendChild(div);
+                });
+            }
+
+            addMessage(
+                `🌙 Rüya tamamlandı: ${data.new_connections} bağlantı, ${data.memories_pruned} budanan, ${data.duration_seconds.toFixed(1)}s`,
+                'system'
+            );
+            refreshStats();
+        }
+
+        // ─── Stats ───────────────────────────────────────────────────────────
+        async function refreshStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                updateStats(data);
+                const gres = await fetch('/api/graph');
+                const gdata = await gres.json();
+                updateGraph(gdata);
+            } catch (e) { console.error('Stats fetch error:', e); }
+        }
+
+        function updateStats(data) {
+            const mem = data.memory || {};
+            const assoc = data.associations || {};
+            const dream = data.dream || {};
+
+            document.getElementById('hdrStm').textContent = mem.stm_count || 0;
+            document.getElementById('hdrAssoc').textContent = assoc.associations || 0;
+            document.getElementById('hdrConcepts').textContent = assoc.concepts || 0;
+            document.getElementById('hdrDreams').textContent = dream.total_dreams || 0;
+
+            document.getElementById('statStm').textContent = mem.stm_count || 0;
+            document.getElementById('statLtm').textContent = mem.ltm_count || 0;
+            document.getElementById('statConcepts').textContent = assoc.concepts || 0;
+            document.getElementById('statEdges').textContent = assoc.associations || 0;
+        }
+
+        function updateEmotion(tag, trend) {
+            const container = document.getElementById('emotionDisplay');
+            const emotion = tag.primary_emotion || 'nötr';
+            const icon = EMOTION_ICONS[emotion] || '❓';
+            const color = EMOTION_COLORS[emotion] || '#6b7280';
+            const intensity = Math.round((tag.current_intensity || 0) * 100);
+            const trendDir = (trend && trend.trend) || 'stable';
+            const trendClass = `trend-${trendDir}`;
+            const trendText = { improving: '📈 İyiye', declining: '📉 Kötüye', stable: '➡️ Stabil' }[trendDir] || '➡️ Stabil';
+
+            container.innerHTML = `
+            <div class="emotion-display">
+                <div class="emotion-icon">${icon}</div>
+                <div class="emotion-info">
+                    <div class="emotion-name">${emotion}</div>
+                    <div class="emotion-bar"><div class="emotion-bar-fill" style="width:${intensity}%;background:${color}"></div></div>
+                </div>
+            </div>
+            <div class="trend-badge ${trendClass}">${trendText}</div>
+        `;
+        }
+
+        // ─── Graph Rendering ─────────────────────────────────────────────────
+        function updateGraph(data) {
+            const oldPositions = {};
+            graphNodes.forEach(n => { oldPositions[n.id] = { x: n.x, y: n.y }; });
+
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+            const cx = w / 2, cy = h / 2;
+
+            graphNodes = (data.nodes || []).map((n, i) => {
+                const old = oldPositions[n.id];
+                const angle = (2 * Math.PI * i) / (data.nodes.length || 1);
+                const r = Math.min(w, h) * 0.3;
+                return {
+                    id: n.id,
+                    x: old ? old.x : cx + Math.cos(angle) * r + (Math.random() - 0.5) * 40,
+                    y: old ? old.y : cy + Math.sin(angle) * r + (Math.random() - 0.5) * 40,
+                    vx: 0, vy: 0,
+                    activation: n.activation || 0,
+                    importance: n.base_importance || 0.5,
+                    frequency: n.frequency || 1,
+                };
+            });
+
+            graphEdges = (data.edges || []).map(e => ({
+                source: e.source,
+                target: e.target,
+                weight: e.weight || 0.5,
+                type: e.association_type || 'semantic',
+            }));
+
+            document.getElementById('graphInfo').textContent =
+                `${graphNodes.length} kavram | ${graphEdges.length} bağlantı`;
+        }
+
+        function renderGraph() {
+            if (!ctx) { animFrame = requestAnimationFrame(renderGraph); return; }
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Simple force simulation
+            applyForces(w, h);
+
+            // Draw edges
+            graphEdges.forEach(e => {
+                const src = graphNodes.find(n => n.id === e.source);
+                const tgt = graphNodes.find(n => n.id === e.target);
+                if (!src || !tgt) return;
+
+                const alpha = Math.min(1, e.weight + 0.1);
+                const colors = {
+                    semantic: `rgba(124, 58, 237, ${alpha})`,
+                    temporal: `rgba(59, 130, 246, ${alpha})`,
+                    cooccurrence: `rgba(6, 182, 212, ${alpha})`,
+                    dream: `rgba(236, 72, 153, ${alpha})`,
+                };
+
+                ctx.beginPath();
+                ctx.moveTo(src.x, src.y);
+                ctx.lineTo(tgt.x, tgt.y);
+                ctx.strokeStyle = colors[e.type] || colors.semantic;
+                ctx.lineWidth = e.weight * 3 + 0.5;
+                ctx.stroke();
+            });
+
+            // Draw nodes
+            graphNodes.forEach(n => {
+                const radius = 6 + n.importance * 10 + n.frequency * 1.5;
+                const glowR = radius + 8 + n.activation * 15;
+
+                // Glow
+                if (n.activation > 0.1) {
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+                    const g = ctx.createRadialGradient(n.x, n.y, radius, n.x, n.y, glowR);
+                    g.addColorStop(0, `rgba(124, 58, 237, ${n.activation * 0.4})`);
+                    g.addColorStop(1, 'rgba(124, 58, 237, 0)');
+                    ctx.fillStyle = g;
+                    ctx.fill();
+                }
+
+                // Node
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+                const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, radius);
+                grad.addColorStop(0, '#a78bfa');
+                grad.addColorStop(1, '#7c3aed');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = 'rgba(232, 232, 240, 0.9)';
+                ctx.font = '500 11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.id, n.x, n.y + radius + 14);
+            });
+
+            animFrame = requestAnimationFrame(renderGraph);
+        }
+
+        function applyForces(w, h) {
+            const k = 0.01; // spring constant
+            const repulsion = 2000;
+            const damping = 0.85;
+            const cx = w / 2, cy = h / 2;
+
+            // Repulsion between nodes
+            for (let i = 0; i < graphNodes.length; i++) {
+                for (let j = i + 1; j < graphNodes.length; j++) {
+                    const a = graphNodes[i], b = graphNodes[j];
+                    let dx = b.x - a.x, dy = b.y - a.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let force = repulsion / (dist * dist);
+                    let fx = (dx / dist) * force, fy = (dy / dist) * force;
+                    a.vx -= fx; a.vy -= fy;
+                    b.vx += fx; b.vy += fy;
+                }
+            }
+
+            // Attraction along edges
+            graphEdges.forEach(e => {
+                const a = graphNodes.find(n => n.id === e.source);
+                const b = graphNodes.find(n => n.id === e.target);
+                if (!a || !b) return;
+                let dx = b.x - a.x, dy = b.y - a.y;
+                let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                let force = k * (dist - 120) * e.weight;
+                let fx = (dx / dist) * force, fy = (dy / dist) * force;
+                a.vx += fx; a.vy += fy;
+                b.vx -= fx; b.vy -= fy;
+            });
+
+            // Center gravity
+            graphNodes.forEach(n => {
+                n.vx += (cx - n.x) * 0.001;
+                n.vy += (cy - n.y) * 0.001;
+            });
+
+            // Apply velocity
+            graphNodes.forEach(n => {
+                if (n === dragNode) return;
+                n.vx *= damping;
+                n.vy *= damping;
+                n.x += n.vx;
+                n.y += n.vy;
+                // Bounds
+                n.x = Math.max(30, Math.min(w - 30, n.x));
+                n.y = Math.max(30, Math.min(h - 30, n.y));
+            });
+        }
+
+        // ─── Mouse Interaction ───────────────────────────────────────────────
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function onMouseDown(e) {
+            const { x, y } = getCanvasCoords(e);
+            const node = graphNodes.find(n => {
+                const r = 6 + n.importance * 10 + n.frequency * 1.5;
+                return Math.hypot(n.x - x, n.y - y) < r + 5;
+            });
+            if (node) {
+                dragNode = node;
+                offsetX = node.x - x;
+                offsetY = node.y - y;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (!dragNode) return;
+            const { x, y } = getCanvasCoords(e);
+            dragNode.x = x + offsetX;
+            dragNode.y = y + offsetY;
+            dragNode.vx = 0;
+            dragNode.vy = 0;
+        }
+
+        function onMouseUp() {
+            dragNode = null;
+        }
+    </script>
+</body>
+
+</html>
