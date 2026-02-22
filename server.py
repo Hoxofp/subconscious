@@ -1,181 +1,444 @@
 """
-Subconscious — Web API (FastAPI)
+🧠 Subconscious Web Server — v2 (Gerçek AI Bilinçaltı)
 
-REST API + WebSocket for the subconscious dashboard.
+Her whisper LLM tarafından üretilir. Template yok.
+Insight'lar gelecek cevapları etkiler.
 """
+import asyncio
+import json
+import random
+import re
 import sys
 import os
-import json
-import asyncio
-from typing import Optional
-from contextlib import asynccontextmanager
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import time
+import threading
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
-from subconscious.engine import SubconsciousEngine
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# ─── Engine singleton ────────────────────────────────────────────────────────
-engine: SubconsciousEngine = None  # type: ignore
+from subconscious import Subconscious
+from subconscious.adapters import OllamaAdapter
+from microsubconscious.layer import SubconsciousLayer
 
-def get_engine() -> SubconsciousEngine:
-    global engine
-    if engine is None:
-        engine = SubconsciousEngine()
-    return engine
+# ─── Initialize ──────────────────────────────────────────────────
 
-def set_engine(ext_engine: SubconsciousEngine):
-    """Dışarıdan engine inject et (start.py all modu için)."""
-    global engine
-    engine = ext_engine
+app = FastAPI(title="🧠 Subconscious")
 
+# Core systems
+try:
+    adapter = OllamaAdapter("qwen2.5-coder:7b-instruct-q4_K_M")
+    mind = Subconscious(adapter=adapter)
+    print("✅ Ollama adapter connected")
+except Exception as e:
+    print(f"⚠️ Ollama unavailable ({e}), running without LLM")
+    adapter = None
+    mind = Subconscious()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Start dream daemon on startup."""
-    e = get_engine()
-    e.start_dreaming(interval_seconds=300)
-    yield
-    e.stop_dreaming()
+micro_layer = SubconsciousLayer(capacity=256)
 
-
-app = FastAPI(
-    title="Subconscious API",
-    version="0.3.0",
-    description="🧠 AI Bilinçaltı Framework API",
-    lifespan=lifespan,
-)
-
-# Serve static files
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-
-# ─── Models ───────────────────────────────────────────────────────────────────
-
-class ChatRequest(BaseModel):
-    message: str
-    show_subconscious: bool = True
-
-class ChatResponse(BaseModel):
-    response: str
-    subconscious: Optional[dict] = None
-
-
-# ─── Routes ───────────────────────────────────────────────────────────────────
-
-@app.get("/")
-async def index():
-    return FileResponse(os.path.join(static_dir, "index.html"))
-
-
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    result = get_engine().chat(req.message, show_subconscious=req.show_subconscious)
-    return ChatResponse(**result)
-
-
-@app.get("/api/stats")
-async def stats():
-    e = get_engine()
-    return {
-        "memory": e.get_memory_stats(),
-        "associations": e.get_association_stats(),
-        "emotions": e.get_emotional_trend(),
-        "dream": e.get_dream_stats(),
-    }
-
-
-@app.get("/api/graph")
-async def graph():
-    return get_engine().associations.export_graph()
-
-
-@app.get("/api/concepts")
-async def concepts(limit: int = 20):
-    return get_engine().get_active_concepts(limit)
-
-
-@app.get("/api/concepts/{name}/related")
-async def related(name: str, limit: int = 10):
-    return get_engine().get_related_concepts(name, limit)
-
-
-@app.get("/api/connections")
-async def connections(limit: int = 10):
-    return get_engine().discover_connections(limit)
-
-
-@app.get("/api/memories")
-async def memories(limit: int = 20):
-    recent = get_engine().memory.recent(limit)
-    return [m.to_dict() for m in recent]
-
-
-@app.post("/api/dream")
-async def dream_now():
-    report = get_engine().dream_now(use_llm=True)
-    return report.to_dict()
-
-
-@app.get("/api/dream/thoughts")
-async def dream_thoughts(limit: int = 10):
-    return get_engine().get_dream_thoughts(limit)
-
-
-# ─── WebSocket for real-time updates ─────────────────────────────────────────
-
+# Connected WebSocket clients
 connected_clients: list[WebSocket] = []
+
+# ─── Conversation State ─────────────────────────────────────────
+
+conversation_history: list[dict] = []     # {"role": "user"/"assistant", "content": "..."}
+extracted_topics: list[str] = []          # LLM-extracted real topics
+background_insights: list[str] = []       # LLM-generated background insights
+recent_concepts: list[str] = []          # For graph visualization
+whisper_history: list[dict] = []
+
+
+# ─── LLM Helper ─────────────────────────────────────────────────
+
+def _llm_generate(prompt: str, system: str = "", max_retries: int = 2) -> str | None:
+    """Call LLM and return response text, or None on failure."""
+    if adapter is None:
+        return None
+    for _ in range(max_retries):
+        try:
+            resp = adapter.generate(prompt=prompt, system=system)
+            if resp and resp.strip():
+                return resp.strip()
+        except Exception as e:
+            print(f"LLM error: {e}")
+    return None
+
+
+def _extract_topics_llm(text: str) -> list[str]:
+    """LLM ile metinden gerçek kavramları/konuları çıkar."""
+    prompt = (
+        f"Aşağıdaki metindeki ana kavramları/konuları çıkar. "
+        f"Sadece anlamlı kavramları ver (isim, terim, konu başlığı). "
+        f"Gramer ekleri veya bağlaçlar OLMAMALI. "
+        f"Virgülle ayırarak, maksimum 5 kavram yaz. Başka hiçbir şey yazma.\n\n"
+        f"Metin: {text}\n\n"
+        f"Kavramlar:"
+    )
+    result = _llm_generate(prompt, system="Sen bir kavram çıkarma asistanısın. Sadece kavramları virgülle listele, başka bir şey yazma.")
+    if result:
+        # Parse comma-separated topics and clean
+        topics = [t.strip().lower().strip('"\'.-*') for t in result.split(",")]
+        topics = [t for t in topics if 2 < len(t) < 40 and not t.isdigit()]
+        return topics[:5]
+
+    # Fallback: basic regex with strict filtering
+    return _extract_topics_regex(text)
+
+
+def _extract_topics_regex(text: str) -> list[str]:
+    """Fallback: regex kavram çıkarma (daha iyi filtreli)."""
+    # Turkish suffixed forms to strip (common endings)
+    SUFFIX_PATTERNS = [
+        r'(ların|lerin|ları|leri|ında|inde|ınca|ince)$',
+        r'(ıyla|iyle|ının|inin|ıdır|idir|ması|mesi)$',
+        r'(arak|erek|ığını|iğini|ılır|ilir|ınır|inir)$',
+        r'(deki|daki|teki|taki)$',
+    ]
+
+    words = re.findall(r'\b\w+\b', text.lower())
+    # Strip Turkish suffixes
+    stemmed = []
+    for w in words:
+        for pat in SUFFIX_PATTERNS:
+            w = re.sub(pat, '', w)
+        if len(w) >= 4:
+            stemmed.append(w)
+
+    # Filter stop words and short words
+    from subconscious.core.mind import STOP_WORDS
+    concepts = [w for w in stemmed if w not in STOP_WORDS and not w.isdigit()]
+
+    seen = set()
+    unique = []
+    for c in concepts:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+    return unique[:8]
+
+
+# ─── WebSocket broadcast ─────────────────────────────────────────
+
+async def broadcast(data: dict):
+    """Send data to all connected clients."""
+    dead = []
+    for ws in connected_clients:
+        try:
+            await ws.send_json(data)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        connected_clients.remove(ws)
+
+
+# ─── Background Thinking Thread ─────────────────────────────────
+
+class BackgroundThinker:
+    """
+    Gerçek bilinçaltı — LLM kullanarak arka planda düşünür.
+    Template string YOK. Her düşünce LLM tarafından üretilir.
+    Insight'lar sonraki cevapları etkiler.
+    """
+
+    def __init__(self):
+        self._running = False
+        self._loop = None
+        self._thread = None
+        self._last_dream = time.time()
+        self._last_whisper = 0
+        self._whisper_count = 0
+
+    def start(self, loop):
+        self._running = True
+        self._loop = loop
+        self._thread = threading.Thread(target=self._think_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+
+    def _think_loop(self):
+        """Main thinking loop — runs every 45-90 seconds."""
+        while self._running:
+            try:
+                # Wait 45-90 seconds between thoughts (not 8-15!)
+                time.sleep(random.uniform(45, 90))
+                if not self._running:
+                    break
+
+                # Only think if we have conversation context
+                if not conversation_history or not extracted_topics:
+                    continue
+
+                # Rate limit: max 1 whisper per 40 seconds
+                if time.time() - self._last_whisper < 40:
+                    continue
+
+                thought = self._generate_real_thought()
+                if thought:
+                    self._last_whisper = time.time()
+                    self._whisper_count += 1
+
+                    # Store insight for future responses
+                    background_insights.append(thought["insight"])
+                    # Keep last 10 insights
+                    while len(background_insights) > 10:
+                        background_insights.pop(0)
+
+                    # Broadcast to clients
+                    if self._loop and connected_clients:
+                        asyncio.run_coroutine_threadsafe(
+                            broadcast(thought), self._loop
+                        )
+
+                # Dream cycle every 3 minutes
+                if time.time() - self._last_dream > 180:
+                    self._run_dream()
+                    self._last_dream = time.time()
+
+            except Exception as e:
+                print(f"Background thinker error: {e}")
+
+    def _generate_real_thought(self) -> dict | None:
+        """LLM ile gerçek bir bilinçaltı düşüncesi üret."""
+        if adapter is None:
+            return None
+
+        # Build context from conversation
+        recent_msgs = conversation_history[-6:]
+        conv_summary = "\n".join([
+            f"{'Kullanıcı' if m['role']=='user' else 'AI'}: {m['content'][:200]}"
+            for m in recent_msgs
+        ])
+
+        topics_str = ", ".join(extracted_topics[:10])
+
+        # Previous insights context
+        prev_insights = ""
+        if background_insights:
+            prev_insights = f"\nÖnceki bilinçaltı düşüncelerim: {'; '.join(background_insights[-3:])}"
+
+        prompt = (
+            f"Sen bir AI'ın bilinçaltısın. Konuşma bağlamına bakarak, "
+            f"tartışılan konular arasında şaşırtıcı, derin veya beklenmedik bir bağlantı kur.\n\n"
+            f"Tartışılan konular: {topics_str}\n"
+            f"Son konuşma:\n{conv_summary}\n"
+            f"{prev_insights}\n\n"
+            f"ÖNEMLİ KURALLAR:\n"
+            f"- Sadece 1-2 cümle yaz, kısa ve öz ol\n"
+            f"- Gerçek bir içgörü sun, boş bağlantı kurma\n"
+            f"- Farklı disiplinlerden (biyoloji, matematik, felsefe, bilgisayar) bağlantı kur\n"
+            f"- 'İlginç...' veya 'Hmm...' gibi dolgu kelimelerle BAŞLAMA\n"
+            f"- Doğrudan içgörüyü yaz\n\n"
+            f"Bilinçaltı düşüncen:"
+        )
+
+        system = (
+            "Sen bir AI'ın bilinçaltı katmanısın. Görevin konuşma bağlamından "
+            "beklenmedik ama gerçek bağlantılar kurmak. Kısa, öz, derin."
+        )
+
+        result = _llm_generate(prompt, system=system)
+        if not result or len(result) < 10:
+            return None
+
+        # Clean up the response
+        insight = result.strip().strip('"').strip("'")
+        # Skip if too generic or too long
+        if len(insight) > 300 or len(insight) < 15:
+            return None
+
+        whisper = {
+            "type": "whisper",
+            "content": f"💭 {insight}",
+            "insight": insight,
+            "topics": extracted_topics[:5],
+            "timestamp": time.time(),
+        }
+        whisper_history.append(whisper)
+        return whisper
+
+    def _run_dream(self):
+        """Background dream cycle — consolidation."""
+        try:
+            report = mind.dream()
+            dream_msg = {
+                "type": "dream",
+                "content": f"🌙 Bellek konsolidasyonu: {report.new_connections} yeni bağlantı, "
+                           f"{report.patterns_found} örüntü keşfedildi",
+                "timestamp": time.time(),
+            }
+            if self._loop and connected_clients:
+                asyncio.run_coroutine_threadsafe(
+                    broadcast(dream_msg), self._loop
+                )
+        except Exception:
+            pass
+
+
+thinker = BackgroundThinker()
+
+
+# ─── API Endpoints ───────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup():
+    loop = asyncio.get_event_loop()
+    thinker.start(loop)
+    print("🧠 Background thinker started")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    thinker.stop()
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    html_path = Path(__file__).parent / "web" / "index.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     connected_clients.append(ws)
+
+    # Send current graph state
+    try:
+        graph_data = _get_graph_data()
+        await ws.send_json({"type": "graph_init", "data": graph_data})
+    except Exception:
+        pass
+
     try:
         while True:
-            data = await ws.receive_text()
-            msg = json.loads(data)
+            data = await ws.receive_json()
 
-            if msg.get("type") == "chat":
-                e = get_engine()
-                result = e.chat(msg["message"], show_subconscious=True)
-                await ws.send_json({
-                    "type": "chat_response",
-                    "data": result,
-                })
-                # Broadcast graph update to all clients
-                graph_data = e.associations.export_graph()
-                stats_data = {
-                    "memory": e.get_memory_stats(),
-                    "associations": e.get_association_stats(),
-                    "emotions": e.get_emotional_trend(),
-                    "dream": e.get_dream_stats(),
-                }
-                for client in connected_clients:
-                    try:
-                        await client.send_json({"type": "graph_update", "data": graph_data})
-                        await client.send_json({"type": "stats_update", "data": stats_data})
-                    except:
-                        pass
+            if data.get("type") == "chat":
+                message = data.get("content", "")
+                response = await _process_chat(message)
+                await ws.send_json(response)
 
-            elif msg.get("type") == "dream":
-                report = get_engine().dream_now(use_llm=True)
-                await ws.send_json({
-                    "type": "dream_report",
-                    "data": report.to_dict(),
-                })
+                # Send updated graph
+                graph_data = _get_graph_data()
+                await broadcast({"type": "graph_update", "data": graph_data})
 
     except WebSocketDisconnect:
         connected_clients.remove(ws)
 
 
-# ─── Run ──────────────────────────────────────────────────────────────────────
+async def _process_chat(message: str) -> dict:
+    """Full subconscious pipeline for a chat message."""
+    global recent_concepts, extracted_topics
+
+    # 1. Store conversation
+    conversation_history.append({"role": "user", "content": message})
+
+    # 2. Extract real topics via LLM (not just words)
+    topics = _extract_topics_llm(message)
+    extracted_topics = list(dict.fromkeys(topics + extracted_topics))[:20]
+    recent_concepts = extracted_topics[:15]
+
+    # 3. microsubconscious layer — Thought DAG processing
+    micro_result = micro_layer.process(message)
+
+    # 4. Build extra context from background insights
+    insight_context = ""
+    if background_insights:
+        insight_context = (
+            "\n\nBilinçaltı düşüncelerim (bunları yanıtına doğal şekilde entegre et):\n"
+            + "\n".join(f"- {ins}" for ins in background_insights[-5:])
+        )
+
+    # 5. subconscious.think() — memory + graph + creativity
+    #    Inject background insights into the thinking process
+    think_result = mind.think(
+        message + insight_context,
+        include_creative=True,
+        n_creative=2,
+    )
+
+    # 6. Store response in conversation history
+    conversation_history.append({"role": "assistant", "content": think_result.response})
+
+    # Keep conversation history manageable
+    while len(conversation_history) > 20:
+        conversation_history.pop(0)
+
+    # 7. Extract topics from response too
+    resp_topics = _extract_topics_llm(think_result.response)
+    extracted_topics = list(dict.fromkeys(extracted_topics + resp_topics))[:25]
+
+    # 8. microsubconscious absorb
+    micro_layer.absorb(think_result.response)
+
+    # 9. Build response
+    return {
+        "type": "chat_response",
+        "content": think_result.response,
+        "meta": {
+            "activated_concepts": dict(list(think_result.activated_concepts.items())[:8]),
+            "creative_sparks": [
+                {"strategy": s.strategy.value, "idea": s.idea[:150]}
+                for s in think_result.creative_sparks
+            ],
+            "topics": topics,
+            "insights_used": len(background_insights),
+            "recalled_count": len(think_result.recalled_memories),
+            "thoughts_in_dag": micro_result.get("total_thoughts", 0),
+        },
+    }
+
+
+def _get_graph_data() -> dict:
+    """Get cognitive graph as D3.js compatible data."""
+    graph = mind.graph
+    nodes = []
+    edges = []
+
+    for node_id in graph._graph.nodes:
+        data = graph._graph.nodes[node_id]
+        nodes.append({
+            "id": node_id,
+            "type": data.get("node_type", "concept"),
+            "activation": data.get("activation", 0.5),
+            "importance": data.get("importance", 0.5),
+            "domain": data.get("domain", ""),
+            "is_recent": node_id in [c.lower() for c in recent_concepts[:10]],
+        })
+
+    for u, v, key, data in graph._graph.edges(keys=True, data=True):
+        edges.append({
+            "source": u,
+            "target": v,
+            "weight": data.get("weight", 0.5),
+            "type": data.get("edge_type", "related"),
+        })
+
+    return {"nodes": nodes, "edges": edges}
+
+
+@app.get("/api/stats")
+async def get_stats():
+    return JSONResponse({
+        "mind": mind.stats(),
+        "micro_layer": micro_layer.stats(),
+        "whispers": len(whisper_history),
+        "insights": background_insights[-5:],
+        "topics": extracted_topics[:10],
+    })
+
+
+# ─── Run ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=3000, reload=True)
+    print("🧠 Starting Subconscious Web Server...")
+    print("   Open http://localhost:8000 in your browser")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -21,6 +21,9 @@ env/
 # Data
 data/*.db
 data/chroma/
+mind_data/
+v1_legacy/
+test_v2.py
 
 # Environment
 .env

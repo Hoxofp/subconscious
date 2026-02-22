@@ -1,108 +1,72 @@
-# 🧠 Subconscious — AI Bilinçaltı Framework
+# 🧠 Subconscious
 
-Yapay zekaya **bilinçaltı** kazandıran bir framework. İnsan bilinçaltından ilham alarak, AI'ın arka planda çağrışımlar kurmasını, duygusal tonları algılamasını ve sezgisel bağlantılar oluşturmasını sağlar.
+**Model-agnostic cognitive middleware for AI.**
 
-## 🧩 Nasıl Çalışır?
+A Python library that adds **memory**, **knowledge graphs**, **creative thinking**, and **background processing** to any Large Language Model. Think of it as a "thinking substrate" — a subconscious that runs beneath any AI.
 
-```
-Kullanıcı Mesajı
-       │
-       ▼
-┌──────────────────┐     ┌──────────────────────────┐
-│   Bilinç (LLM)   │────▶│  🔒 Bilinçaltı (Gizli)   │
-│   Ana Yanıt       │     │  • Çağrışım çıkarma       │
-│                   │◀────│  • Duygusal analiz         │
-│                   │     │  • Sezgi üretme            │
-└──────────────────┘     └──────────────────────────┘
-       │                          │
-       ▼                          ▼
-  Yanıt döner              Belleğe kaydeder
-  (sezgilerle               (STM + LTM)
-   zenginleştirilmiş)
-```
+## Quick Start
 
-**Dual-Prompt Mimarisi**: Her kullanıcı mesajında iki ayrı LLM çağrısı yapılır:
-1. **Gizli prompt** — Bilinçaltı analiz (kullanıcı görmez)
-2. **Görünür prompt** — Sezgilerle zenginleştirilmiş yanıt
-
-## 📦 Kurulum
-
-```bash
-# Bağımlılıkları yükle
-pip install -r requirements.txt
-
-# Ollama'nın çalıştığından emin ol
-ollama serve
-
-# Modeli çek (ilk seferde)
-ollama pull qwen2.5:7b
-```
-
-## 🚀 Kullanım
-
-### CLI Demo
-```bash
-python cli.py
-```
-
-### Komutlar
-| Komut | Açıklama |
-|---|---|
-| `/sub` | Bilinçaltı düşünceleri göster/gizle |
-| `/bellek` | Bellek istatistiklerini göster |
-| `/sıfırla` | Konuşmayı sıfırla (bellek korunur) |
-| `/çıkış` | Çıkış |
-
-### Python API
 ```python
-from subconscious.engine import SubconsciousEngine
+from subconscious import Subconscious
+from subconscious.adapters import OllamaAdapter
 
-engine = SubconsciousEngine()
+# Initialize with any LLM (or None for pure cognitive mode)
+mind = Subconscious(adapter=OllamaAdapter("qwen2.5:7b"))
 
-# Basit sohbet
-result = engine.chat("Kuantum fiziği hakkında ne düşünüyorsun?")
-print(result["response"])
+# Learn knowledge
+mind.learn("Python GIL prevents true parallelism", domain="programming")
+mind.learn("Ant colonies find optimal paths without central control", domain="biology")
 
-# Bilinçaltını göster
-result = engine.chat("Evren hakkında konuşalım", show_subconscious=True)
-print(result["subconscious"])  # çağrışımlar, sezgiler, duygusal ton
+# Think — LLM response enriched by memory + graph + associations
+result = mind.think("How to solve the parallelism problem?")
+print(result.response)            # LLM-enriched answer
+print(result.activated_concepts)  # Related concepts from knowledge graph
+print(result.creative_sparks)     # Novel ideas from creative engine
+
+# Imagine — cross-domain creative sparks
+sparks = mind.imagine("ant colony", "microservices")
+for s in sparks:
+    print(f"[{s.strategy.value}] {s.idea}")
+
+# Dream — background consolidation & discovery
+report = mind.dream()
 ```
 
-## 🗂️ Proje Yapısı
+## Architecture
 
 ```
-subconscious/
-├── cli.py                  # Etkileşimli terminal arayüzü
-├── config.py               # Ayarlar (Pydantic)
-├── requirements.txt        # Bağımlılıklar
-├── subconscious/
-│   ├── __init__.py
-│   ├── engine.py           # 🧠 Ana bilinçaltı motoru
-│   ├── memory.py           # 💾 İki katmanlı bellek (STM + LTM)
-│   └── prompts.py          # 📝 Prompt şablonları
-└── data/                   # (otomatik oluşur)
-    ├── memory.db            # SQLite — kısa süreli bellek
-    └── chroma/              # ChromaDB — uzun süreli bellek
+┌─────────────────────────────────────────────┐
+│           🧠 Subconscious API               │
+│   think()  learn()  recall()  imagine()     │
+├─────────┬─────────┬──────────┬──────────────┤
+│ 📦 Memory│ 🕸 Graph │ 🎨 Creative│ 🌙 Dream    │
+│ Working  │ Multi-  │ Bisociat. │ Consolidate │
+│ Episodic │ type    │ Blending  │ Discover    │
+│ Semantic │ Spread  │ Analogy   │ Forget      │
+│ Procedur.│ Walk    │ Lateral   │ Hypothesize │
+├─────────┴─────────┴──────────┴──────────────┤
+│              🔌 LLM Adapters                │
+│      Ollama  ·  OpenAI  ·  Anthropic        │
+└─────────────────────────────────────────────┘
 ```
 
-## 🔮 Yol Haritası
+## Features
 
-- [x] **Faz 1** — MVP: Dual-prompt bilinçaltı + bellek + CLI
-- [ ] **Faz 2** — Association Engine, Emotional Tagging, Spreading Activation
-- [ ] **Faz 3** — Dream Daemon (arka plan rüya modülü)
-- [ ] **Faz 4** — Graf tabanlı çağrışım ağı + Web UI
+- **4-Layer Memory**: Working (7±2) → Episodic (SQLite) → Semantic (ChromaDB) → Procedural (reinforcement)
+- **Cognitive Graph**: Multi-type nodes & edges, spreading activation, random walk discovery
+- **Creative Engine**: Bisociation, conceptual blending, analogical reasoning, lateral thinking
+- **Dream Processor**: Background memory consolidation, pattern mining, smart forgetting
+- **Model Agnostic**: Works with Ollama, OpenAI, Anthropic — or without any LLM
 
-## ⚙️ Yapılandırma
+## Install
 
-Ortam değişkenleri veya `.env` dosyası ile:
+```bash
+pip install -e .                    # Core
+pip install -e ".[ollama]"          # + Ollama support
+pip install -e ".[openai]"          # + OpenAI support
+pip install -e ".[dev]"             # + dev tools
+```
 
-| Değişken | Varsayılan | Açıklama |
-|---|---|---|
-| `SUBCONSCIOUS_OLLAMA_MODEL` | `qwen2.5:7b` | Kullanılacak LLM modeli |
-| `SUBCONSCIOUS_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama sunucu adresi |
-| `SUBCONSCIOUS_STM_CAPACITY` | `50` | STM maksimum anı sayısı |
-| `SUBCONSCIOUS_ASSOCIATION_THRESHOLD` | `0.6` | Min benzerlik eşiği |
-
-## 📄 Lisans
+## License
 
 MIT
