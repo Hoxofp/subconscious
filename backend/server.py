@@ -31,7 +31,7 @@ app = FastAPI(title="🧠 Subconscious")
 
 # Core systems
 try:
-    adapter = OllamaAdapter("qwen2.5-coder:7b-instruct-q4_K_M")
+    adapter = OllamaAdapter("llama3.1:8b")
     mind = Subconscious(adapter=adapter)
     print("✅ Ollama adapter connected")
 except Exception as e:
@@ -55,7 +55,9 @@ whisper_history: list[dict] = []
 
 # ─── LLM Helper ─────────────────────────────────────────────────
 
-def _llm_generate(prompt: str, system: str = "", max_retries: int = 2) -> str | None:
+from typing import Optional
+
+def _llm_generate(prompt: str, system: str = "", max_retries: int = 2) -> Optional[str]:
     """Call LLM and return response text, or None on failure."""
     if adapter is None:
         return None
@@ -204,7 +206,7 @@ class BackgroundThinker:
             except Exception as e:
                 print(f"Background thinker error: {e}")
 
-    def _generate_real_thought(self) -> dict | None:
+    def _generate_real_thought(self) -> Optional[dict]:
         """LLM ile gerçek bir bilinçaltı düşüncesi üret."""
         if adapter is None:
             return None
@@ -298,10 +300,9 @@ async def shutdown():
     thinker.stop()
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def index():
-    html_path = Path(__file__).parent / "web" / "index.html"
-    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    return {"status": "Subconscious AI Backend Operational"}
 
 
 @app.websocket("/ws")

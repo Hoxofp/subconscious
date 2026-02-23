@@ -25,7 +25,7 @@ class OllamaAdapter:
         response = adapter.generate("Merhaba!")
     """
 
-    def __init__(self, model: str = "qwen2.5-coder:7b-instruct-q4_K_M", base_url: str = ""):
+    def __init__(self, model: str = "llama3.1:8b", base_url: str = ""):
         if _ollama is None:
             raise ImportError(
                 "Ollama adapter requires 'ollama' package. "
