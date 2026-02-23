@@ -20,7 +20,7 @@ print("=" * 65)
 print("\n📦 1. Initializing...")
 try:
     from subconscious.adapters import OllamaAdapter
-    adapter = OllamaAdapter("llama3.1:8b")
+    adapter = OllamaAdapter("qwen2.5-coder:7b-instruct-q4_K_M")
     mind = Subconscious(adapter=adapter)
     print(f"   ✅ Adapter: Ollama ({adapter.model_name})")
 except Exception as e:

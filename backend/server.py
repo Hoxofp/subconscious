@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # Add project root to path
@@ -23,15 +24,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from subconscious import Subconscious
 from subconscious.adapters import OllamaAdapter
+from subconscious.memory.chat_db import ChatDB
 from microsubconscious.layer import SubconsciousLayer
 
 # ─── Initialize ──────────────────────────────────────────────────
 
 app = FastAPI(title="🧠 Subconscious")
 
+# Add CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Core systems
 try:
-    adapter = OllamaAdapter("llama3.1:8b")
+    adapter = OllamaAdapter("qwen2.5-coder:7b-instruct-q4_K_M")
     mind = Subconscious(adapter=adapter)
     print("✅ Ollama adapter connected")
 except Exception as e:
@@ -40,6 +51,7 @@ except Exception as e:
     mind = Subconscious()
 
 micro_layer = SubconsciousLayer(capacity=256)
+chat_db = ChatDB()
 
 # Connected WebSocket clients
 connected_clients: list[WebSocket] = []
@@ -227,22 +239,22 @@ class BackgroundThinker:
 
         prompt = (
             f"Sen bir AI'ın bilinçaltısın. Konuşma bağlamına bakarak, "
-            f"tartışılan konular arasında şaşırtıcı, derin veya beklenmedik bir bağlantı kur.\n\n"
+            f"tartışılan konular arasında ŞOK EDİCİ derecede uzak ama AKIL ALMAZ derecede mantıklı bir bağ kur.\n\n"
             f"Tartışılan konular: {topics_str}\n"
             f"Son konuşma:\n{conv_summary}\n"
             f"{prev_insights}\n\n"
             f"ÖNEMLİ KURALLAR:\n"
-            f"- Sadece 1-2 cümle yaz, kısa ve öz ol\n"
-            f"- Gerçek bir içgörü sun, boş bağlantı kurma\n"
-            f"- Farklı disiplinlerden (biyoloji, matematik, felsefe, bilgisayar) bağlantı kur\n"
+            f"- Sadece 1-2 cümle yaz, kısa, öz ve şiirsel/felsefi ol\n"
+            f"- Birbirinden en alakasız görünen 2 şeyi (örneğin: kara delikler ve insan üzüntüsü, veya bilgisayar algoritmaları ve orman ekosistemi gibi) evrensel bir prensip etrafında birleştir\n"
+            f"- Kesinlikle saçmalamadan, okuyanda 'vay canına' dedirtecek derin bir analoji kur\n"
             f"- 'İlginç...' veya 'Hmm...' gibi dolgu kelimelerle BAŞLAMA\n"
-            f"- Doğrudan içgörüyü yaz\n\n"
+            f"- Doğrudan içgörüyü, vurucu bir aforizma veya tespit olarak yaz\n\n"
             f"Bilinçaltı düşüncen:"
         )
 
         system = (
-            "Sen bir AI'ın bilinçaltı katmanısın. Görevin konuşma bağlamından "
-            "beklenmedik ama gerçek bağlantılar kurmak. Kısa, öz, derin."
+            "Sen bir AI'ın bilinçaltı katmanısın. Görevin, evrendeki en alakasız "
+            "iki kavram arasında bile gizli kalmış, derin ve %100 mantıklı bir örüntü/kök bulmak. Kısa, vurucu, felsefi ve Türkçe konuş."
         )
 
         result = _llm_generate(prompt, system=system)
@@ -323,7 +335,15 @@ async def websocket_endpoint(ws: WebSocket):
 
             if data.get("type") == "chat":
                 message = data.get("content", "")
-                response = await _process_chat(message)
+                session_id = data.get("session_id")
+                
+                # If no session provided, generate one
+                if not session_id:
+                    # Let LLM guess a short title, or use a default
+                    session_id = chat_db.create_session("Yeni Konuşma")
+                    await ws.send_json({"type": "session_created", "session_id": session_id})
+                
+                response = await _process_chat(message, session_id)
                 await ws.send_json(response)
 
                 # Send updated graph
@@ -334,11 +354,12 @@ async def websocket_endpoint(ws: WebSocket):
         connected_clients.remove(ws)
 
 
-async def _process_chat(message: str) -> dict:
+async def _process_chat(message: str, session_id: str) -> dict:
     """Full subconscious pipeline for a chat message."""
     global recent_concepts, extracted_topics
 
     # 1. Store conversation
+    chat_db.add_message(session_id, "user", message)
     conversation_history.append({"role": "user", "content": message})
 
     # 2. Extract real topics via LLM (not just words)
@@ -353,7 +374,7 @@ async def _process_chat(message: str) -> dict:
     insight_context = ""
     if background_insights:
         insight_context = (
-            "\n\nBilinçaltı düşüncelerim (bunları yanıtına doğal şekilde entegre et):\n"
+            "\n\nBilinçaltı düşüncelerim (eğer kullanıcının sorusuyla çok mantıklı bir bağlantısı varsa yanıtına kısaca entegre et, yoksa tamamen görmezden gel ve normal bir asistan olarak soruyu yanıtla):\n"
             + "\n".join(f"- {ins}" for ins in background_insights[-5:])
         )
 
@@ -366,6 +387,9 @@ async def _process_chat(message: str) -> dict:
     )
 
     # 6. Store response in conversation history
+    chat_db.add_message(session_id, "assistant", think_result.response, meta={
+        "CreativeSparks": [s.strategy.value for s in think_result.creative_sparks]
+    })
     conversation_history.append({"role": "assistant", "content": think_result.response})
 
     # Keep conversation history manageable
@@ -423,6 +447,19 @@ def _get_graph_data() -> dict:
         })
 
     return {"nodes": nodes, "edges": edges}
+
+
+# ─── API Routes for Chat History ──────────────────────────────────
+
+@app.get("/api/sessions")
+async def get_sessions():
+    sessions = chat_db.list_sessions()
+    return JSONResponse({"sessions": sessions})
+
+@app.get("/api/sessions/{session_id}/messages")
+async def get_session_messages(session_id: str):
+    messages = chat_db.get_messages(session_id)
+    return JSONResponse({"messages": messages})
 
 
 @app.get("/api/stats")

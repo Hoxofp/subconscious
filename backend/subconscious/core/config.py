@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     FORGETTING_THRESHOLD: float = 0.2   # Below this importance, forget
 
     # LLM (defaults; adapter-level override)
-    DEFAULT_MODEL: str = "llama3.1:8b"
+    DEFAULT_MODEL: str = "qwen2.5-coder:7b-instruct-q4_K_M"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     class Config:
