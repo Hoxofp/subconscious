@@ -398,7 +398,7 @@ class CognitiveGraph:
 
     def save(self):
         """Grafı JSON olarak kaydet."""
-        data = nx.node_link_data(self._graph, edges="edges")
+        data = nx.node_link_data(self._graph)
         path = Path(self._persist_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
@@ -411,7 +411,7 @@ class CognitiveGraph:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self._graph = nx.node_link_graph(data, directed=True, multigraph=True, edges="edges")
+                self._graph = nx.node_link_graph(data, directed=True, multigraph=True)
             except Exception:
                 self._graph = nx.MultiDiGraph()
 
